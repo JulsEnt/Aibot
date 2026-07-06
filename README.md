@@ -1,14 +1,16 @@
-# AI Trade Bot Backend Phase 8
+# Backend 8.1 Compatible
 
-Render settings:
-- Build command: `npm install`
-- Start command: `npm start`
-- Root directory: leave empty if uploading this backend-only ZIP.
+This backend matches the current frontend bundle endpoints:
+- GET /api/state
+- POST /api/scan
+- POST /api/paper-cycle
+- POST /api/deposit
+- POST /api/withdraw
+- POST /api/emergency
+- POST /api/admin/deposit/:id/approve
+- POST /api/admin/withdraw/:id/approve
 
-Environment variables:
-- `PORT=10000`
-- `NODE_ENV=production`
-- `FRONTEND_URL=https://your-netlify-site.netlify.app`
-- Binance keys optional for market data because public REST endpoints are used.
-
-This is still paper-only. Live real-money trading is intentionally locked.
+Render:
+- Build: npm install
+- Start: npm start
+- Root directory: empty if uploading this zip.

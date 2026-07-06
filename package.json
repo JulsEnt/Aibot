@@ -1,6 +1,6 @@
 {
-  "name": "ai-trade-bot-backend-phase8",
-  "version": "8.0.0",
+  "name": "ai-trade-bot-backend-compatible",
+  "version": "8.1.0",
   "type": "module",
   "scripts": {
     "start": "node server.js",
