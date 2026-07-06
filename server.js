@@ -145,7 +145,7 @@ const traders=[
 let state={
   balance:1000, equity:1000, startBalance:1000,
   demoDeposits:[], withdrawals:[], emergencyStop:false, botRunning:false, botStatus:"Online",
-  risk:{perTrade:1, dailyLossLimit:3, maxOpenTrades:1, minSafetyScore:88, takeProfitPct:0.18, stopLossPct:0.35},
+  risk:{perTrade:1, dailyLossLimit:3, maxOpenTrades:1, minSafetyScore:78, takeProfitPct:0.18, stopLossPct:0.35},
   alerts:[{id:"a0", type:"System", text:"Phase 9 continuous paper trader ready. Real trading locked.", time:new Date().toLocaleTimeString()}],
   scanner:[], trades:[], traders, openTrade:null, wins:0, losses:0, closedPnl:0,
   admin:{users:1,pendingDeposits:0,pendingWithdrawals:0,realMoneyLocked:true,mode:"Continuous Paper Trading"},
@@ -180,6 +180,10 @@ async function runScan(force=false) {
 }
 
 function openPaper(best) {
+  if (state.openTrade && state.openTrade.status === "OPEN") {
+    addAlert("Paper", `Trade already open on ${state.openTrade.symbol}. Monitoring existing trade.`);
+    return;
+  }
   const amount=+(state.balance*(state.risk.perTrade/100)).toFixed(2);
   const tpPct=Math.max(0.1, Math.min(0.35, best.expectedMove || state.risk.takeProfitPct));
   const slPct=state.risk.stopLossPct;
@@ -190,7 +194,7 @@ function openPaper(best) {
     result:"OPEN", status:"OPEN", pnl:0, reason:best.reason
   };
   state.openTrade=trade; state.trades.unshift(trade);
-  addAlert("Paper",`Paper trade opened on ${best.symbol}`);
+  addAlert("Paper",`Paper trade opened on ${best.symbol}. TP: $${trade.takeProfit}, SL: $${trade.stopLoss}`);
 }
 
 async function monitorTrade() {
@@ -218,9 +222,15 @@ async function autoCycle() {
   await monitorTrade();
   if(state.openTrade) return;
   await runScan(false);
-  const best=state.scanner.find(m=>m.signal==="BUY" && m.safety>=state.risk.minSafetyScore);
-  if(best) openPaper(best);
-  else addAlert("Paper","No safe trade available. Bot skipped.");
+  let best = state.scanner.find(m => m.signal === "BUY" && m.safety >= state.risk.minSafetyScore);
+  if (!best) best = state.scanner.find(m => (m.signal === "WATCH" || m.signal === "BUY") && m.safety >= state.risk.minSafetyScore);
+  if (!best) best = state.scanner[0];
+
+  if (best && best.safety >= 70) {
+    openPaper(best);
+  } else {
+    addAlert("Paper", `No trade opened. Best safety score was ${best?.safety ?? 0}/100, below paper-test minimum.`);
+  }
 }
 
 setInterval(()=>autoCycle().catch(e=>addAlert("Error",e.message)), 15000);
