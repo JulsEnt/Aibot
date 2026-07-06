@@ -223,13 +223,15 @@ async function autoCycle() {
   if(state.openTrade) return;
   await runScan(false);
   let best = state.scanner.find(m => m.signal === "BUY" && m.safety >= state.risk.minSafetyScore);
-  if (!best) best = state.scanner.find(m => (m.signal === "WATCH" || m.signal === "BUY") && m.safety >= state.risk.minSafetyScore);
+  if (!best) best = state.scanner.find(m => m.signal === "WATCH" || m.signal === "BUY");
   if (!best) best = state.scanner[0];
 
-  if (best && best.safety >= 70) {
+  if (best) {
+    // PAPER MODE ONLY: open the best available setup so the user can test lifecycle.
+    // Real-money trading remains locked.
     openPaper(best);
   } else {
-    addAlert("Paper", `No trade opened. Best safety score was ${best?.safety ?? 0}/100, below paper-test minimum.`);
+    addAlert("Paper", "No market data available, so no paper trade could be opened.");
   }
 }
 
@@ -247,8 +249,23 @@ app.post("/api/emergency",(req,res)=>{ state.emergencyStop=Boolean(req.body.enab
 app.post("/api/bot/start",(req,res)=>{ state.emergencyStop=false; state.botRunning=true; state.botStatus="Auto Running"; addAlert("Bot","Continuous paper trader started"); res.json(publicState()); });
 app.post("/api/bot/stop",(req,res)=>{ state.botRunning=false; state.botStatus="Stopped"; addAlert("Bot","Continuous paper trader stopped"); res.json(publicState()); });
 
-app.post("/api/paper-cycle",async(req,res)=>{ if(state.emergencyStop) return res.status(423).json({ok:false,error:"Emergency stop is active",state}); await autoCycle(); res.json(publicState()); });
-app.post("/api/paper/run",async(req,res)=>{ await autoCycle(); res.json(publicState()); });
+app.post("/api/paper-cycle",async(req,res)=>{
+  if(state.emergencyStop) return res.status(423).json({ok:false,error:"Emergency stop is active",state});
+  await runScan(true);
+  await autoCycle();
+  res.json(publicState());
+});
+app.post("/api/paper/run",async(req,res)=>{ await runScan(true); await autoCycle(); res.json(publicState()); });
+
+app.post("/api/paper/force-open", async (req,res) => {
+  if(state.emergencyStop) return res.status(423).json({ok:false,error:"Emergency stop is active",state});
+  await runScan(true);
+  const best = state.scanner[0];
+  if (best) openPaper(best);
+  else addAlert("Paper", "No market data available for force paper trade.");
+  res.json(publicState());
+});
+
 app.get("/api/paper/status",(req,res)=>res.json({ok:true,paper:{balance:state.balance,trades:state.trades,openTrade:state.openTrade,wins:state.wins,losses:state.losses,closedPnl:state.closedPnl}}));
 
 app.listen(PORT,()=>console.log(`Backend running on http://localhost:${PORT}`));
