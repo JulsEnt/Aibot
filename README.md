@@ -1,16 +1,16 @@
-# Backend 8.1 Compatible
+# AI Trade Bot Phase 9 Continuous Paper Trader
 
-This backend matches the current frontend bundle endpoints:
-- GET /api/state
-- POST /api/scan
-- POST /api/paper-cycle
-- POST /api/deposit
-- POST /api/withdraw
-- POST /api/emergency
-- POST /api/admin/deposit/:id/approve
-- POST /api/admin/withdraw/:id/approve
+Upload this backend-only ZIP to Render.
 
-Render:
-- Build: npm install
-- Start: npm start
-- Root directory: empty if uploading this zip.
+Settings:
+- Build command: npm install
+- Start command: npm start
+- Root directory: leave empty
+
+Environment:
+- PORT=10000
+- NODE_ENV=production
+- FRONTEND_URL=*
+
+Adds continuous paper trading, monitoring, take-profit, stop-loss, balance updates, win/loss stats, and automatic rescanning.
+Real-money trading remains locked.
