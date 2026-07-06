@@ -1,4 +1,4 @@
-# AI Trade Bot Phase 9 Continuous Paper Trader
+# AI Trade Bot Phase 10: 5-Minute Paper Recycling
 
 Upload this backend-only ZIP to Render.
 
@@ -7,17 +7,10 @@ Settings:
 - Start command: npm start
 - Root directory: leave empty
 
-Environment:
-- PORT=10000
-- NODE_ENV=production
-- FRONTEND_URL=*
-
-Adds continuous paper trading, monitoring, take-profit, stop-loss, balance updates, win/loss stats, and automatic rescanning.
-Real-money trading remains locked.
-
-
-PATCH:
-- Paper-test threshold lowered so the bot opens demo trades more often.
-- It can open WATCH setups for paper testing only.
+What changed:
+- Open paper trade now tracks unrealized P/L.
+- Trade closes automatically at Take Profit, Stop Loss, OR after 5 minutes.
+- Balance updates after every closed trade.
+- Win/Loss and Closed P/L update.
+- After close, the bot scans again and can open the next paper trade.
 - Real-money trading remains locked.
-- If a trade is already open, it will not open another one until the current trade closes.

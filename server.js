@@ -188,7 +188,7 @@ function openPaper(best) {
   const tpPct=Math.max(0.1, Math.min(0.35, best.expectedMove || state.risk.takeProfitPct));
   const slPct=state.risk.stopLossPct;
   const trade={
-    id:`T${Date.now()}`, time:new Date().toLocaleString(), symbol:best.symbol, exchange:best.exchange,
+    id:`T${Date.now()}`, time:new Date().toLocaleString(), openedAtMs:Date.now(), symbol:best.symbol, exchange:best.exchange,
     side:"BUY", entry:best.price, current:best.price, takeProfit:+(best.price*(1+tpPct/100)).toFixed(6),
     stopLoss:+(best.price*(1-slPct/100)).toFixed(6), amount, safety:best.safety, trader:"AI Safe Scanner",
     result:"OPEN", status:"OPEN", pnl:0, reason:best.reason
@@ -202,19 +202,43 @@ async function monitorTrade() {
   const t=state.openTrade;
   try {
     const {price, exchange}=await latestPrice(t.symbol);
-    t.current=+price.toFixed(6); t.exchange=exchange;
+    t.current=+price.toFixed(6); 
+    t.exchange=exchange;
+
+    const openedMs = t.openedAtMs || Date.now();
+    const ageMs = Date.now() - openedMs;
     let closeReason=null;
+
     if(price>=t.takeProfit) closeReason="TAKE_PROFIT";
     if(price<=t.stopLoss) closeReason="STOP_LOSS";
-    if(!closeReason) return;
+
+    // PAPER MODE ONLY: recycle every 5 minutes even if TP/SL was not hit.
+    if(!closeReason && ageMs >= 5 * 60 * 1000) closeReason="TIME_EXIT_5M";
+
+    if(!closeReason) {
+      t.unrealizedPct = +(((price - t.entry) / t.entry) * 100).toFixed(4);
+      t.unrealizedPnl = +(t.amount * (t.unrealizedPct / 100)).toFixed(4);
+      return;
+    }
+
     const pct=((price-t.entry)/t.entry)*100;
     const pnl=+(t.amount*(pct/100)).toFixed(4);
-    t.pnl=pnl; t.result=closeReason; t.status="CLOSED"; t.closedAt=new Date().toLocaleString();
-    state.balance=+(state.balance+pnl).toFixed(2); state.equity=state.balance; state.closedPnl=+(state.closedPnl+pnl).toFixed(4);
+    t.pnl=pnl; 
+    t.closePrice=+price.toFixed(6);
+    t.result=closeReason; 
+    t.status="CLOSED"; 
+    t.closedAt=new Date().toLocaleString();
+
+    state.balance=+(state.balance+pnl).toFixed(2); 
+    state.equity=state.balance; 
+    state.closedPnl=+(state.closedPnl+pnl).toFixed(4);
     if(pnl>=0) state.wins++; else state.losses++;
+
     state.openTrade=null;
-    addAlert("Paper",`${closeReason}: ${t.symbol} closed. P/L ₦${pnl}`);
-  } catch(e) { addAlert("Monitor",`Could not update ${t.symbol}: ${e.message}`); }
+    addAlert("Paper",`${closeReason}: ${t.symbol} closed. P/L ₦${pnl}. Recycling to next scan.`);
+  } catch(e) { 
+    addAlert("Monitor",`Could not update ${t.symbol}: ${e.message}`); 
+  }
 }
 
 async function autoCycle() {
@@ -235,7 +259,7 @@ async function autoCycle() {
   }
 }
 
-setInterval(()=>autoCycle().catch(e=>addAlert("Error",e.message)), 15000);
+setInterval(()=>autoCycle().catch(e=>addAlert("Error",e.message)), 20000);
 
 app.get("/",(req,res)=>res.json({ok:true,service:"AI Trade Bot Backend",phase:9}));
 app.get("/api/health",(req,res)=>res.json({ok:true,mode:"continuous-paper-only",phase:9,cacheAgeMs:Date.now()-cacheAt}));
@@ -251,6 +275,8 @@ app.post("/api/bot/stop",(req,res)=>{ state.botRunning=false; state.botStatus="S
 
 app.post("/api/paper-cycle",async(req,res)=>{
   if(state.emergencyStop) return res.status(423).json({ok:false,error:"Emergency stop is active",state});
+  state.botRunning = true;
+  state.botStatus = "Auto Running";
   await runScan(true);
   await autoCycle();
   res.json(publicState());
