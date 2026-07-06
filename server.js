@@ -8,7 +8,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/api/health', (req, res) => res.json({ ok: true, mode: 'paper-only', phase: 6, marketData: 'binance-public-rest' }));
+app.get('/api/health', (req, res) => res.json({ ok: true, mode: 'paper-only', phase: 6, marketData: 'multi-provider-rest', providers: ['Binance','Bybit','OKX'] }));
 app.get('/api/state', (req, res) => res.json(getState()));
 app.post('/api/deposit', (req, res) => res.json(deposit(Number(req.body.amount || 0))));
 app.post('/api/withdraw', (req, res) => res.json(withdraw(Number(req.body.amount || 0))));
@@ -17,17 +17,17 @@ app.post('/api/admin/withdraw/:id/approve', (req, res) => res.json(approveWithdr
 app.post('/api/emergency', (req, res) => res.json(toggleEmergency(Boolean(req.body.enabled))));
 
 app.get('/api/market/tickers', async (req, res) => {
-  try { res.json({ ok: true, data: await get24hTickers(), source: 'Binance live 24hr ticker' }); }
+  try { res.json({ ok: true, data: await get24hTickers(), source: 'Live market data: Binance with Bybit/OKX fallback' }); }
   catch (err) { res.status(502).json({ ok: false, error: err.message }); }
 });
 
 app.get('/api/market/candles/:symbol', async (req, res) => {
-  try { res.json({ ok: true, data: await getCandles(req.params.symbol, req.query.interval || '15m', Number(req.query.limit || 120)), source: 'Binance live candles' }); }
+  try { res.json({ ok: true, data: await getCandles(req.params.symbol, req.query.interval || '15m', Number(req.query.limit || 120)), source: 'Live candles: Binance with Bybit/OKX fallback' }); }
   catch (err) { res.status(502).json({ ok: false, error: err.message }); }
 });
 
 app.get('/api/market/analyze/:symbol', async (req, res) => {
-  try { res.json({ ok: true, data: await analyzeSymbol(req.params.symbol), source: 'Binance live candles' }); }
+  try { res.json({ ok: true, data: await analyzeSymbol(req.params.symbol), source: 'Live candles: Binance with Bybit/OKX fallback' }); }
   catch (err) { res.status(502).json({ ok: false, error: err.message }); }
 });
 
@@ -35,7 +35,7 @@ app.post('/api/scan', async (req, res) => {
   try {
     const minScore = Number(req.body?.minSafetyScore || getState().risk.minSafetyScore || 90);
     const scanner = await scanMarket(minScore);
-    res.json(syncScanner(scanner, 'Live Binance data'));
+    res.json(syncScanner(scanner, 'Live market data'));
   } catch (err) {
     res.status(502).json(syncScanner([], 'Market data unavailable', err.message));
   }
