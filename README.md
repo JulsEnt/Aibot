@@ -1,16 +1,15 @@
-# AI Trade Bot Phase 10: 5-Minute Paper Recycling
+# Phase 10 Hard Close Fix
 
-Upload this backend-only ZIP to Render.
+Upload this backend-only ZIP to Render and redeploy.
 
-Settings:
+Fixes:
+- `/api/state` now checks and closes trades automatically when the dashboard refreshes.
+- Trades close after 5 minutes even if latest price fetch fails.
+- Open trade now includes age and remaining seconds.
+- Added manual test endpoint `/api/paper/close-now`.
+- Balance, Win/Loss, Closed P/L update after close.
+
+Render settings:
 - Build command: npm install
 - Start command: npm start
 - Root directory: leave empty
-
-What changed:
-- Open paper trade now tracks unrealized P/L.
-- Trade closes automatically at Take Profit, Stop Loss, OR after 5 minutes.
-- Balance updates after every closed trade.
-- Win/Loss and Closed P/L update.
-- After close, the bot scans again and can open the next paper trade.
-- Real-money trading remains locked.

@@ -200,45 +200,51 @@ function openPaper(best) {
 async function monitorTrade() {
   if(!state.openTrade || state.openTrade.status!=="OPEN") return;
   const t=state.openTrade;
+
+  const openedMs = Number(t.openedAtMs || Date.now());
+  const ageMs = Date.now() - openedMs;
+  let price = Number(t.current || t.entry);
+  let exchange = t.exchange || "Paper";
+
   try {
-    const {price, exchange}=await latestPrice(t.symbol);
-    t.current=+price.toFixed(6); 
-    t.exchange=exchange;
-
-    const openedMs = t.openedAtMs || Date.now();
-    const ageMs = Date.now() - openedMs;
-    let closeReason=null;
-
-    if(price>=t.takeProfit) closeReason="TAKE_PROFIT";
-    if(price<=t.stopLoss) closeReason="STOP_LOSS";
-
-    // PAPER MODE ONLY: recycle every 5 minutes even if TP/SL was not hit.
-    if(!closeReason && ageMs >= 5 * 60 * 1000) closeReason="TIME_EXIT_5M";
-
-    if(!closeReason) {
-      t.unrealizedPct = +(((price - t.entry) / t.entry) * 100).toFixed(4);
-      t.unrealizedPnl = +(t.amount * (t.unrealizedPct / 100)).toFixed(4);
-      return;
-    }
-
-    const pct=((price-t.entry)/t.entry)*100;
-    const pnl=+(t.amount*(pct/100)).toFixed(4);
-    t.pnl=pnl; 
-    t.closePrice=+price.toFixed(6);
-    t.result=closeReason; 
-    t.status="CLOSED"; 
-    t.closedAt=new Date().toLocaleString();
-
-    state.balance=+(state.balance+pnl).toFixed(2); 
-    state.equity=state.balance; 
-    state.closedPnl=+(state.closedPnl+pnl).toFixed(4);
-    if(pnl>=0) state.wins++; else state.losses++;
-
-    state.openTrade=null;
-    addAlert("Paper",`${closeReason}: ${t.symbol} closed. P/L ₦${pnl}. Recycling to next scan.`);
-  } catch(e) { 
-    addAlert("Monitor",`Could not update ${t.symbol}: ${e.message}`); 
+    const latest = await latestPrice(t.symbol);
+    price = Number(latest.price || price);
+    exchange = latest.exchange || exchange;
+  } catch(e) {
+    // If price fetch fails, still allow 5-minute paper recycle using current/entry price.
+    addAlert("Monitor", `Price update failed for ${t.symbol}. Using last paper price for recycle check.`);
   }
+
+  t.current = +price.toFixed(6);
+  t.exchange = exchange;
+  t.ageSeconds = Math.floor(ageMs / 1000);
+  t.remainingSeconds = Math.max(0, Math.ceil((5 * 60 * 1000 - ageMs) / 1000));
+
+  let closeReason = null;
+  if(price >= t.takeProfit) closeReason = "TAKE_PROFIT";
+  if(price <= t.stopLoss) closeReason = "STOP_LOSS";
+  if(!closeReason && ageMs >= 5 * 60 * 1000) closeReason = "TIME_EXIT_5M";
+
+  const livePct = ((price - t.entry) / t.entry) * 100;
+  t.unrealizedPct = +livePct.toFixed(4);
+  t.unrealizedPnl = +(t.amount * (livePct / 100)).toFixed(4);
+
+  if(!closeReason) return;
+
+  const pnl = +(t.amount * (livePct / 100)).toFixed(4);
+  t.pnl = pnl;
+  t.closePrice = +price.toFixed(6);
+  t.result = closeReason;
+  t.status = "CLOSED";
+  t.closedAt = new Date().toLocaleString();
+
+  state.balance = +(state.balance + pnl).toFixed(2);
+  state.equity = state.balance;
+  state.closedPnl = +(state.closedPnl + pnl).toFixed(4);
+  if(pnl >= 0) state.wins++; else state.losses++;
+
+  state.openTrade = null;
+  addAlert("Paper", `${closeReason}: ${t.symbol} closed. P/L ₦${pnl}. Balance ₦${state.balance}.`);
 }
 
 async function autoCycle() {
@@ -263,7 +269,7 @@ setInterval(()=>autoCycle().catch(e=>addAlert("Error",e.message)), 20000);
 
 app.get("/",(req,res)=>res.json({ok:true,service:"AI Trade Bot Backend",phase:9}));
 app.get("/api/health",(req,res)=>res.json({ok:true,mode:"continuous-paper-only",phase:9,cacheAgeMs:Date.now()-cacheAt}));
-app.get("/api/state",(req,res)=>res.json(publicState()));
+app.get("/api/state", async (req,res)=>{ await monitorTrade(); res.json(publicState()); });
 app.post("/api/scan",async(req,res)=>{ await runScan(true); res.json(publicState()); });
 app.get("/api/market/scan",async(req,res)=>{ await runScan(false); res.json({ok:true,best:state.scanner[0]||null,markets:state.scanner}); });
 
@@ -292,6 +298,17 @@ app.post("/api/paper/force-open", async (req,res) => {
   res.json(publicState());
 });
 
-app.get("/api/paper/status",(req,res)=>res.json({ok:true,paper:{balance:state.balance,trades:state.trades,openTrade:state.openTrade,wins:state.wins,losses:state.losses,closedPnl:state.closedPnl}}));
+
+app.post("/api/paper/close-now", async (req,res) => {
+  if(!state.openTrade) {
+    addAlert("Paper", "No open trade to close.");
+    return res.json(publicState());
+  }
+  state.openTrade.openedAtMs = Date.now() - (5 * 60 * 1000 + 1000);
+  await monitorTrade();
+  res.json(publicState());
+});
+
+app.get("/api/paper/status", async (req,res)=>{ await monitorTrade(); res.json({ok:true,paper:{balance:state.balance,trades:state.trades,openTrade:state.openTrade,wins:state.wins,losses:state.losses,closedPnl:state.closedPnl}}); });
 
 app.listen(PORT,()=>console.log(`Backend running on http://localhost:${PORT}`));
